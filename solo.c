@@ -4586,3 +4586,67 @@ int main(int argc, char **argv)
 #endif
 
 /* vim: set shiftwidth=4 tabstop=8: */
+
+#include "pico/stdlib.h"
+#include <hardware/structs/rosc.h>
+#include <stdarg.h>
+
+void fatal(const char *fmt, ...)
+{
+    va_list ap;
+
+    fprintf(stderr, "fatal error: ");
+
+    va_start(ap, fmt);
+    vfprintf(stderr, fmt, ap);
+    va_end(ap);
+
+    fprintf(stderr, "\n");
+    exit(1);
+}
+
+uint32_t hwrand32()
+{
+    /*
+     * https://forums.raspberrypi.com/viewtopic.php?p=1815162&sid=31b805cc028d4e7f81f59f5cd0fab4af#p1815162
+     */
+    uint32_t random = 0;
+    uint32_t random_bit;
+
+    for (int k = 0; k < 32; k++) {
+        while (1) {
+            random_bit = rosc_hw->randombit & 1;
+            if (random_bit != (rosc_hw->randombit & 1)) break;
+        }
+
+        random = (random << 1) | random_bit;
+    }
+
+    return random;
+}
+
+int main() {
+    game_params *p;
+    game_state *s;
+    char *id = NULL, *desc, *aux = NULL;
+    const char *err;
+    bool grade = false;
+    struct difficulty dlev;
+
+    stdio_uart_init();
+
+    /* Seed random state */
+    uint32_t seed = hwrand32();
+    random_state *rs = random_new((void*)&seed, sizeof(seed));
+
+    while (true) {
+        p = default_params();
+        desc = new_game_desc(p, rs, &aux, false);
+        s = new_game(NULL, p, desc);
+
+        printf("%s\n", grid_text_format(s->cr, s->blocks, s->xtype, s->grid));
+        sleep_ms(1000);
+    }
+
+    return 0;
+}
