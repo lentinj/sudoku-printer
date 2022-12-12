@@ -5753,21 +5753,49 @@ uint32_t hwrand32()
 }
 
 /* Print a horizontal line in ESC/POS speak: https://reference.epson-biz.com/modules/ref_escpos/index.php?content_id=88 */
-void horiz_line(unsigned char intersect_ch, uint8_t cells) {
-    uint8_t i, j;
-    uint16_t len = (29 + 1) * cells + 1;
+void horiz_line(unsigned char intersect_ch, uint8_t cells, uint16_t bold_right, uint16_t bold_bottom) {
+    uint8_t i, j, next_cnt = 29;
+    uint16_t len = (29 + 1) * cells + 2;
 
     putchar(0x1b); putchar(0x2a);
     putchar(0x00); /* 8 dot mode */
     putchar(len & 255);  /* Length low bit */
     putchar(len / 256);  /* Length high bit */
+
+    /* Initial bold line */
+    putchar(intersect_ch);
+    putchar(intersect_ch);
+    next_cnt = 28;
+
     for (i = 0; i < cells; i++) {
+        for (j = 0; j < next_cnt; j++) {
+            putchar(bold_bottom & (1 << i) ? 0b00011000 : 0b00010000);
+        }
+
         putchar(intersect_ch);
-        for (j = 0; j < 29; j++) {
-            putchar(0b00010000);
+        if (bold_right & (1 << i)) {
+            putchar(intersect_ch);
+            next_cnt = 28;
+        } else {
+            next_cnt = 29;
         }
     }
-    putchar(intersect_ch);
+}
+
+void vert_line(bool bold) {
+    /* Double-height - https://escpos.readthedocs.io/en/latest/font_cmds.html#select-character-size-1d-21-rel-phx */
+    putchar(0x1d); putchar(0x21); putchar(0x01);
+
+    putchar(' ');
+    if (bold) {
+        /* Double-strike mode - https://escpos.readthedocs.io/en/latest/font_cmds.html#select-double-strike-mode-1b-47-phx */
+        putchar(0x1b); putchar(0x47); putchar(0x01);
+    }
+    putchar('|');
+    if (bold) {
+        putchar(0x1b); putchar(0x47); putchar(0x00);
+    }
+    putchar(' ');
 }
 
 int main() {
@@ -5832,21 +5860,45 @@ int main() {
 
         /* Output grid */
         for (y = 0; y < s->cr; y++) {
-            horiz_line(y == 0 ? 0b00011111 : 0b11111111, s->cr);
+            uint16_t bold_right = 0;
+            uint16_t bold_bottom = 0;
+
+            for (x = 0; x < s->cr; x++) {
+                /* Should separator to right / bottom of this cell be bold? */
+                if (x == s->cr - 1 || s->blocks->whichblock[y*s->cr+x] != s->blocks->whichblock[y*s->cr+x+1]) {
+                    bold_right |= 1 << x;
+                }
+                if (y == s->cr - 1 || s->blocks->whichblock[y*s->cr+x] != s->blocks->whichblock[(y+1)*s->cr+x]) {
+                    bold_bottom |= 1 << x;
+                }
+            }
+
+            /* Initial horizontal / vertical lines */
+            if (y == 0) {
+                horiz_line(0b00011111, s->cr, bold_right, 0x1FF);
+            }
+
             for (x = 0; x < s->cr; x++) {
                 digit d = s->grid[y*s->cr+x];
 
-                printf("\x1d\x21\x01 | \x1d\x21\x11");
+                if (x == 0) {
+                    vert_line(true);
+                }
+
+                /* Double-size characters - https://escpos.readthedocs.io/en/latest/font_cmds.html#select-character-size-1d-21-rel-phx */
+                putchar(0x1d); putchar(0x21); putchar(0x11);
                 if (d > 0) {
                     printf("%d", d);
                 } else {
                     putchar(' ');
                 }
+
+                vert_line(bold_right & (1 << x));
             }
-            printf("\x1d\x21\x01 | \x1d\x21\x11");
             printf("\r\n");
+
+            horiz_line(y == (s->cr - 1) ? 0b11111000 : 0b11111111, s->cr, bold_right, bold_bottom);
         }
-        horiz_line(0b11110000, s->cr);
 
         /* Re-init to reset spacing, feed ready for tear */
         printf("\x1b\x40\r\n\r\n");
