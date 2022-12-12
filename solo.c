@@ -4589,6 +4589,7 @@ int main(int argc, char **argv)
 
 #include "pico/stdlib.h"
 #include <hardware/structs/rosc.h>
+#include "hardware/adc.h"
 #include <stdarg.h>
 
 void fatal(const char *fmt, ...)
@@ -4639,8 +4640,39 @@ int main() {
     uint32_t seed = hwrand32();
     random_state *rs = random_new((void*)&seed, sizeof(seed));
 
+    /* Configure ADC to read knob */
+    adc_init();
+    adc_gpio_init(26);
+    adc_select_input(0);
+    gpio_init(27);
+    gpio_set_dir(27, GPIO_OUT);
+    gpio_put(27, 1);
+
     while (true) {
         p = default_params();
+
+        /* Set difficulty according to knob position */
+        uint8_t knob_pos = adc_read() / (4070 / 6); /* Range: 17..4068~4074 */
+        if (knob_pos == 0) {
+            p->diff = DIFF_BLOCK;
+            printf("1: Trivial\r\n");
+        } else if (knob_pos == 1) {
+            p->diff = DIFF_SIMPLE;
+            printf("2: Basic\r\n");
+        } else if (knob_pos == 2) {
+            p->diff = DIFF_INTERSECT;
+            printf("3: Intermediate\r\n");
+        } else if (knob_pos == 3) {
+            p->diff = DIFF_SET;
+            printf("4: Advanced\r\n");
+        } else if (knob_pos == 4) {
+            p->diff = DIFF_EXTREME;
+            printf("5: Extreme\r\n");
+        } else if (knob_pos == 5) {
+            p->diff = DIFF_RECURSIVE;
+            printf("6: Unreasonable\r\n");
+        }
+
         desc = new_game_desc(p, rs, &aux, false);
         s = new_game(NULL, p, desc);
 
