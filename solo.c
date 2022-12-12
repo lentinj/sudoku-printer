@@ -4695,6 +4695,9 @@ int main() {
     gpio_set_dir(27, GPIO_OUT);
     gpio_put(27, 1);
 
+    /* Give printer a chance to boot */
+    sleep_ms(2000);
+
     while (true) {
         p = default_params();
 
