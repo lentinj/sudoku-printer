@@ -5752,6 +5752,24 @@ uint32_t hwrand32()
     return random;
 }
 
+/* Print a horizontal line in ESC/POS speak: https://reference.epson-biz.com/modules/ref_escpos/index.php?content_id=88 */
+void horiz_line(unsigned char intersect_ch, uint8_t cells) {
+    uint8_t i, j;
+    uint16_t len = (29 + 1) * cells + 1;
+
+    putchar(0x1b); putchar(0x2a);
+    putchar(0x00); /* 8 dot mode */
+    putchar(len & 255);  /* Length low bit */
+    putchar(len / 256);  /* Length high bit */
+    for (i = 0; i < cells; i++) {
+        putchar(intersect_ch);
+        for (j = 0; j < 29; j++) {
+            putchar(0b00010000);
+        }
+    }
+    putchar(intersect_ch);
+}
+
 int main() {
     game_params *p;
     game_state *s;
@@ -5759,6 +5777,7 @@ int main() {
     const char *err;
     bool grade = false;
     struct difficulty dlev;
+    int x, y;
 
     stdio_uart_init();
 
@@ -5776,6 +5795,12 @@ int main() {
 
     while (true) {
         p = default_params();
+
+        /* Init printer: https://escpos.readthedocs.io/en/latest/font_cmds.html#b40 */
+        printf("\x1b\x40");
+
+        /* Center-align: https://escpos.readthedocs.io/en/latest/layout.html#select-justification-1b-61-rel-phx */
+        printf("\x1b\x61\x01");
 
         /* Set difficulty according to knob position */
         uint8_t knob_pos = adc_read() / (4070 / 6); /* Range: 17..4068~4074 */
@@ -5802,8 +5827,33 @@ int main() {
         desc = new_game_desc(p, rs, &aux, false);
         s = new_game(NULL, p, desc);
 
-        printf("%s\n", grid_text_format(s->cr, s->blocks, s->xtype, s->grid));
-        sleep_ms(1000);
+        /* Minimal Line spacing - https://escpos.readthedocs.io/en/latest/layout.html#line-spacing-1b-33-rel */
+        printf("\x1b\x33"); putchar(0x00);
+
+        /* Output grid */
+        for (y = 0; y < s->cr; y++) {
+            horiz_line(y == 0 ? 0b00011111 : 0b11111111, s->cr);
+            for (x = 0; x < s->cr; x++) {
+                digit d = s->grid[y*s->cr+x];
+
+                printf("\x1d\x21\x01 | \x1d\x21\x11");
+                if (d > 0) {
+                    printf("%d", d);
+                } else {
+                    putchar(' ');
+                }
+            }
+            printf("\x1d\x21\x01 | \x1d\x21\x11");
+            printf("\r\n");
+        }
+        horiz_line(0b11110000, s->cr);
+
+        /* Re-init to reset spacing, feed ready for tear */
+        printf("\x1b\x40\r\n\r\n");
+        stdio_flush();
+
+        /* Wait 60s, print another one */
+        sleep_ms(60000);
     }
 
     return 0;
