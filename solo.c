@@ -5621,15 +5621,15 @@ const struct game thegame = {
     interpret_move,
     execute_move,
     PREFERRED_TILE_SIZE, game_compute_size, game_set_size,
-    game_colours,
+    false /* game_colours */,
     game_new_drawstate,
     game_free_drawstate,
-    game_redraw,
+    false /* game_redraw */,
     game_anim_length,
     game_flash_length,
     game_get_cursor_location,
     game_status,
-    true, false, game_print_size, game_print,
+    true, false, game_print_size, false /* game_print */,
     false,			       /* wants_statusbar */
     false, game_timing_state,
     REQUIRE_RBUTTON | REQUIRE_NUMPAD,  /* flags */
