@@ -16,6 +16,16 @@ set(PICO_EXAMPLES_PATH ${PROJECT_SOURCE_DIR})
 # Initialize the SDK
 pico_sdk_init()
 
+add_executable(sudokuprinter
+        divvy.c
+        dsf.c
+        malloc.c
+        random.c
+        misc.c
+        solo.c
+        main.c
+        )
+
 # pull in common dependencies
 target_link_libraries(sudokuprinter pico_stdlib)
 
